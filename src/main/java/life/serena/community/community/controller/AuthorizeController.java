@@ -1,7 +1,11 @@
 package life.serena.community.community.controller;
 
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
 import life.serena.community.community.dto.AccessTokeDTO;
 import life.serena.community.community.dto.GithubUser;
+import life.serena.community.community.mapper.UserMapper;
+import life.serena.community.community.model.User;
 import life.serena.community.community.provider.GithubProvider;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -13,22 +17,30 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Controller
 public class AuthorizeController {
     @Autowired
     private GithubProvider githubProvider;
+
     @Value("${github.cilent.id}")
     private String clientId;
+
     @Value("${github.cilent.secret}")
     private String cilentSecret;
 
     @Value("${github.redirect.uri}")
     private String redirectUri;
 
+
+    @Autowired
+    private UserMapper userMapper;
+
     @GetMapping("/callback")
     public String callback(@RequestParam(name="code") String code,
-                           @RequestParam(name = "state") String state){
+                           @RequestParam(name = "state") String state,
+                           HttpServletRequest request){
         AccessTokeDTO accessTokeDTO = new AccessTokeDTO();
         accessTokeDTO.setCilent_id(clientId);
         accessTokeDTO.setCilent_secret(cilentSecret);
@@ -36,10 +48,21 @@ public class AuthorizeController {
         accessTokeDTO.setRedirect_uri(redirectUri);
         accessTokeDTO.setState(state);
         String accessToken = githubProvider.getAccessToken(accessTokeDTO);
-        GithubUser user = githubProvider.getUser(accessToken);
-        System.out.println(user.getName());
+        GithubUser githubUser = githubProvider.getUser(accessToken);
+        if(githubUser!=null){
+            User user = new User();
+            user.setToken(UUID.randomUUID().toString());
+            user.setName(githubUser.getName());
+            user.setAccountId(String.valueOf(githubUser.getId()));
+            user.setGmtCreate(System.currentTimeMillis());
+            user.setGmtModified(user.getGmtCreate());
+            userMapper.insert(user);
+            request.getSession().setAttribute("user",githubUser);
+            return "redirect:/";
+        }else{
+            return "redirect:/";
+        }
 
-        return "index";
 
 
     }
